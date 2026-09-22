@@ -1,0 +1,7 @@
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  background: #0e1114;
+  color: #e8e4dc;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
