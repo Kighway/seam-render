@@ -7,7 +7,13 @@ type PresetName = 'Rotation' | 'Scale' | 'Shear' | 'Ill-conditioned'
 type Stage = 0 | 1 | 2
 
 const identity = new Matrix4()
-const stageNames = ['Original: I', 'Apply X', 'Apply X⁻¹: restored'] as const
+const stageNames = ['Original', 'Transformed', 'Restored'] as const
+const presetDescriptions: Record<PresetName, string> = {
+  Rotation: 'Turns the plate 45° around the vertical axis.',
+  Scale: 'Stretches one axis while compressing another.',
+  Shear: 'Slides one axis in proportion to another.',
+  'Ill-conditioned': 'Nearly collapses one dimension; inversion becomes numerically fragile.',
+}
 
 const presets: Record<PresetName, Matrix4> = {
   Rotation: new Matrix4().makeRotationY(Math.PI / 4),
@@ -18,8 +24,6 @@ const presets: Record<PresetName, Matrix4> = {
     0, 0,    1, 0,
     0, 0,    0, 1,
   ),
-  // One axis is almost collapsed. Inverting it requires enormous amplification
-  // along that direction: tiny numerical/input errors can become large output errors.
   'Ill-conditioned': new Matrix4().makeScale(1, 1, 0.0001),
 }
 
@@ -34,7 +38,6 @@ function decompose(matrix: Matrix4) {
 function AnimatedPlate({ target }: { target: Matrix4 }) {
   const group = useRef<Group>(null)
   const targetParts = useMemo(() => decompose(target), [target])
-
   useFrame((_, delta) => {
     if (!group.current) return
     const alpha = 1 - Math.exp(-4 * delta)
@@ -42,7 +45,6 @@ function AnimatedPlate({ target }: { target: Matrix4 }) {
     group.current.quaternion.slerp(targetParts.rotation, alpha)
     group.current.scale.lerp(targetParts.scale, alpha)
   })
-
   return (
     <group ref={group}>
       <mesh receiveShadow castShadow>
@@ -65,29 +67,21 @@ function Stanchion({ position }: { position: [number, number, number] }) {
 function MatrixReadout({ matrix }: { matrix: Matrix4 }) {
   const e = matrix.clone().transpose().elements
   return (
-    <pre style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
-      {[0, 1, 2, 3].map((row) =>
-        `[ ${[0, 1, 2, 3].map((col) => e[row * 4 + col].toFixed(3).padStart(7)).join(' ')} ]`,
+    <pre className="matrix-readout">
+      {[0, 1, 2, 3].map(row =>
+        `[ ${[0, 1, 2, 3].map(col => e[row * 4 + col].toFixed(3).padStart(7)).join(' ')} ]`,
       ).join('\n')}
     </pre>
   )
 }
 
 function conditionNumber(matrix: Matrix4) {
-  // For these affine demos the interesting part is the upper-left 3x3 linear map.
-  // Estimate κ₂ via eigenvalues of AᵀA (singular values squared).
   const a = new Matrix3().setFromMatrix4(matrix)
   const e = a.elements
-  const rows = [
-    [e[0], e[3], e[6]],
-    [e[1], e[4], e[7]],
-    [e[2], e[5], e[8]],
-  ]
+  const rows = [[e[0], e[3], e[6]], [e[1], e[4], e[7]], [e[2], e[5], e[8]]]
   const ata = Array.from({ length: 3 }, (_, i) =>
     Array.from({ length: 3 }, (_, j) => rows.reduce((sum, row) => sum + row[i] * row[j], 0)),
   )
-
-  // Jacobi iterations for this tiny real symmetric matrix.
   for (let n = 0; n < 20; n++) {
     let p = 0, q = 1
     for (const [i, j] of [[0, 1], [0, 2], [1, 2]] as const)
@@ -120,7 +114,7 @@ export function Dock() {
   const kappa = useMemo(() => conditionNumber(transform), [transform])
 
   return (
-    <div style={{ height: '100%', position: 'relative' }}>
+    <div className="dock-shell">
       <Canvas shadows camera={{ position: [4.2, 2.8, 5.2], fov: 40 }}>
         <color attach="background" args={['#8a93a0']} />
         <fog attach="fog" args={['#8a93a0', 8, 22]} />
@@ -137,24 +131,42 @@ export function Dock() {
         <OrbitControls enablePan={false} minDistance={3} maxDistance={12} maxPolarAngle={Math.PI / 2.05} />
       </Canvas>
 
-      <div style={{ position: 'absolute', left: 16, bottom: 16, maxWidth: 470, padding: 14, background: 'rgba(18,22,27,.86)', color: '#eef2f6', borderRadius: 8, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-          {(Object.keys(presets) as PresetName[]).map(name =>
-            <button key={name} onClick={() => { setPreset(name); setStage(0) }}>{name}</button>
-          )}
+      <aside className="lab-panel">
+        <div className="eyebrow">TRANSFORM LAB</div>
+        <label className="field-label" htmlFor="transform-select">Transformation</label>
+        <select
+          id="transform-select"
+          className="transform-select"
+          value={preset}
+          onChange={e => { setPreset(e.target.value as PresetName); setStage(0) }}
+        >
+          {(Object.keys(presets) as PresetName[]).map(name => <option key={name}>{name}</option>)}
+        </select>
+        <p className="description">{presetDescriptions[preset]}</p>
+
+        <div className="section-label">State</div>
+        <div className="segmented" role="group" aria-label="Transformation state">
+          {stageNames.map((name, index) => (
+            <button
+              key={name}
+              className={stage === index ? 'active' : ''}
+              onClick={() => setStage(index as Stage)}
+            >{name}</button>
+          ))}
         </div>
-        <div style={{ marginBottom: 8, fontWeight: 700 }}>{preset} · {stageNames[stage]}</div>
-        <MatrixReadout matrix={shownMatrix} />
-        <div style={{ marginTop: 7, fontSize: 12 }}>condition number κ₂(X) ≈ {kappa.toExponential(3)}</div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button onClick={() => setStage(0)}>Original</button>
-          <button onClick={() => setStage(1)}>Apply X</button>
-          <button onClick={() => setStage(2)}>Apply X⁻¹</button>
+
+        <div className="status-row">
+          <span>κ₂(X)</span>
+          <strong className={kappa > 100 ? 'warning' : ''}>{kappa.toExponential(3)}</strong>
         </div>
-        <div style={{ marginTop: 8, opacity: 0.72, fontSize: 11 }}>
-          Small κ: stable geometry. Huge κ: X nearly collapses a dimension, so X⁻¹ must amplify it enormously.
+        <div className="matrix-card">
+          <div className="matrix-title">{stage === 0 ? 'I' : stage === 1 ? 'X' : 'X⁻¹'}</div>
+          <MatrixReadout matrix={shownMatrix} />
         </div>
-      </div>
+        <p className="hint">
+          {stage === 2 ? 'X · X⁻¹ ≈ I — geometry restored.' : 'Orbit the scene, then step through the transformation.'}
+        </p>
+      </aside>
     </div>
   )
 }
