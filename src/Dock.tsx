@@ -3,30 +3,46 @@ import { Environment, OrbitControls } from '@react-three/drei'
 import { useMemo, useRef, useState } from 'react'
 import { Group, Matrix3, Matrix4 } from 'three'
 
-type PresetName = 'Rotation' | 'Scale' | 'Shear' | 'Ill-conditioned'
 type Stage = 0 | 1 | 2
+
+type TransformPreset = {
+  name: string
+  description: string
+  createMatrix: () => Matrix4
+}
 
 const identity = new Matrix4()
 const stageNames = ['Original', 'Transformed', 'Restored'] as const
 
-const presetDescriptions: Record<PresetName, string> = {
-  Rotation: 'Turns the plate 45° around the vertical axis.',
-  Scale: 'Stretches one axis while compressing another.',
-  Shear: 'Slides one axis in proportion to another.',
-  'Ill-conditioned': 'Nearly collapses one dimension; inversion becomes numerically fragile.',
-}
+const presets = {
+  rotation: {
+    name: 'Rotation',
+    description: 'Turns the plate 45° around the vertical axis.',
+    createMatrix: () => new Matrix4().makeRotationY(Math.PI / 4),
+  },
+  scale: {
+    name: 'Scale',
+    description: 'Stretches one axis while compressing another.',
+    createMatrix: () => new Matrix4().makeScale(1.7, 1, 0.55),
+  },
+  shear: {
+    name: 'Shear',
+    description: 'Slides one axis in proportion to another.',
+    createMatrix: () => new Matrix4().set(
+      1, 0.85, 0, 0,
+      0, 1,    0, 0,
+      0, 0,    1, 0,
+      0, 0,    0, 1,
+    ),
+  },
+  illConditioned: {
+    name: 'Ill-conditioned',
+    description: 'Nearly collapses one dimension; inversion becomes numerically fragile.',
+    createMatrix: () => new Matrix4().makeScale(1, 1, 0.0001),
+  },
+} satisfies Record<string, TransformPreset>
 
-const presets: Record<PresetName, Matrix4> = {
-  Rotation: new Matrix4().makeRotationY(Math.PI / 4),
-  Scale: new Matrix4().makeScale(1.7, 1, 0.55),
-  Shear: new Matrix4().set(
-    1, 0.85, 0, 0,
-    0, 1,    0, 0,
-    0, 0,    1, 0,
-    0, 0,    0, 1,
-  ),
-  'Ill-conditioned': new Matrix4().makeScale(1, 1, 0.0001),
-}
+type PresetKey = keyof typeof presets
 
 function AnimatedPlate({ target }: { target: Matrix4 }) {
   const group = useRef<Group>(null)
@@ -106,13 +122,14 @@ function conditionNumber(matrix: Matrix4) {
 
 export function Dock() {
   const [stage, setStage] = useState<Stage>(0)
-  const [preset, setPreset] = useState<PresetName>('Rotation')
+  const [presetKey, setPresetKey] = useState<PresetKey>('rotation')
   const [compact, setCompact] = useState(true)
   const [controlsOpen, setControlsOpen] = useState(true)
   const [renderOpen, setRenderOpen] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
 
-  const transform = presets[preset]
+  const preset = presets[presetKey]
+  const transform = useMemo(() => preset.createMatrix(), [preset])
   const inverse = useMemo(() => transform.clone().invert(), [transform])
   const restored = useMemo(() => transform.clone().multiply(inverse), [transform, inverse])
   const targets = [identity, transform, restored] as const
@@ -167,13 +184,13 @@ export function Dock() {
                   <span>Transformation</span>
                   <select
                     className="transform-select"
-                    value={preset}
+                    value={presetKey}
                     onChange={e => {
-                      setPreset(e.target.value as PresetName)
+                      setPresetKey(e.target.value as PresetKey)
                       setStage(0)
                     }}
                   >
-                    {(Object.keys(presets) as PresetName[]).map(name => <option key={name}>{name}</option>)}
+                    {(Object.entries(presets) as [PresetKey, TransformPreset][]).map(([key, item]) => <option key={key} value={key}>{item.name}</option>)}
                   </select>
                 </label>
 
@@ -194,7 +211,7 @@ export function Dock() {
               </div>
 
               <div className="verbose-only">
-                <p className="description">{presetDescriptions[preset]}</p>
+                <p className="description">{preset.description}</p>
                 <div className="status-row">
                   <span>condition number κ₂(X)</span>
                   <strong className={kappa > 100 ? 'warning' : ''}>{kappa.toExponential(3)}</strong>
