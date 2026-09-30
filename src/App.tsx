@@ -1,4 +1,4 @@
-import { Dock } from './Dock'
+import { Dock } from './ui/Dock'
 
 export default function App() {
   return (
