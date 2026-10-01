@@ -1,12 +1,25 @@
 import { Canvas } from '@react-three/fiber'
 import { Environment, OrbitControls } from '@react-three/drei'
+import { useState } from 'react'
 import type { Mat4 } from '../math'
 import { AnimatedPlate } from './AnimatedPlate'
 import { Stanchion } from './Stanchion'
+import { ViewportErrorBoundary, ViewportFallback } from './ViewportErrorBoundary'
 
 export function Viewport({ target }: { target: Mat4 }) {
+  const [attempt, setAttempt] = useState(0)
+  const retry = () => setAttempt((current) => current + 1)
+
   return (
-    <Canvas shadows camera={{ position: [4.2, 2.8, 5.2], fov: 40 }} dpr={[1, 2]}>
+    <ViewportErrorBoundary key={attempt} onRetry={retry}>
+      <SceneCanvas target={target} onRetry={retry} />
+    </ViewportErrorBoundary>
+  )
+}
+
+function SceneCanvas({ target, onRetry }: { target: Mat4; onRetry: () => void }) {
+  return (
+    <Canvas shadows camera={{ position: [4.2, 2.8, 5.2], fov: 40 }} dpr={[1, 2]} fallback={<ViewportFallback onRetry={onRetry} />}>
       <color attach="background" args={['#8a93a0']} />
       <fog attach="fog" args={['#8a93a0', 8, 22]} />
       <hemisphereLight args={['#cfd6de', '#3a4048', 0.55]} />

@@ -9,15 +9,17 @@ import {
   type ShearPlane,
   type Stage,
   type TransformKind,
-  type Vec3Scale,
 } from '../math'
+import { createScaleInput, editScaleInput } from './scaleInput'
 
 export function useTransformLab() {
   const [stage, setStage] = useState<Stage>(0)
   const [kind, setKind] = useState<TransformKind>('rotate')
   const [rotationAxis, setRotationAxis] = useState<Axis>('y')
   const [angle, setAngle] = useState(45)
-  const [scale, setScale] = useState<Vec3Scale>({ x: 1.7, y: 1, z: 0.55 })
+  const [scaleInput, setScaleInput] = useState(() => createScaleInput({ x: 1.7, y: 1, z: 0.55 }))
+  const scale = scaleInput.value
+  const scaleError = kind === 'scale' ? scaleInput.error : null
   const [shearPlane, setShearPlane] = useState<ShearPlane>('xy')
   const [shear, setShear] = useState(0.85)
   const [illAxis, setIllAxis] = useState<Axis>('z')
@@ -28,6 +30,13 @@ export function useTransformLab() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   const showTransform = () => setStage(1)
+
+  const updateScale = (axis: Axis, raw: string) => {
+    const next = editScaleInput(scaleInput, axis, raw)
+    setScaleInput(next)
+    if (!next.error) showTransform()
+  }
+  const resetScaleInput = () => setScaleInput((current) => createScaleInput(current.value))
 
   const transform = useMemo(() => {
     if (kind === 'rotate') return buildTransform({ kind, axis: rotationAxis, degrees: angle })
@@ -47,7 +56,7 @@ export function useTransformLab() {
     kind, setKind,
     rotationAxis, setRotationAxis,
     angle, setAngle,
-    scale, setScale,
+    scale, scaleDraft: scaleInput.draft, scaleError, updateScale, resetScaleInput,
     shearPlane, setShearPlane,
     shear, setShear,
     illAxis, setIllAxis,

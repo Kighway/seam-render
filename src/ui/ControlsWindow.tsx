@@ -13,7 +13,7 @@ const KINDS: [TransformKind, string][] = [
 export function ControlsWindow({ lab }: { lab: TransformLab }) {
   const {
     kind, setKind, stage, setStage, showTransform, compact, setCompact,
-    setControlsOpen, kappa, shownMatrix, shearPlane, illAxis,
+    setControlsOpen, kappa, shownMatrix, shearPlane, illAxis, scaleError,
   } = lab
 
   const hint =
@@ -49,7 +49,7 @@ export function ControlsWindow({ lab }: { lab: TransformLab }) {
           <span>State</span>
           <div className="segmented">
             {STAGE_NAMES.map((name, index) => (
-              <button key={name} className={stage === index ? 'active' : ''} onClick={() => setStage(index as Stage)}>
+              <button key={name} className={stage === index ? 'active' : ''} disabled={Boolean(scaleError)} onClick={() => setStage(index as Stage)}>
                 {name}
               </button>
             ))}

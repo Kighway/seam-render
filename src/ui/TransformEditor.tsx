@@ -6,7 +6,7 @@ import { AxisButtons } from './AxisButtons'
 export function TransformEditor({ lab }: { lab: TransformLab }) {
   const {
     kind, rotationAxis, setRotationAxis, angle, setAngle,
-    scale, setScale, shearPlane, setShearPlane, shear, setShear,
+    scaleDraft, scaleError, updateScale, resetScaleInput, shearPlane, setShearPlane, shear, setShear,
     illAxis, setIllAxis, epsilon, setEpsilon, showTransform,
   } = lab
 
@@ -35,14 +35,31 @@ export function TransformEditor({ lab }: { lab: TransformLab }) {
         </>
       )}
       {kind === 'scale' && (
-        <div className="xyz-grid">
-          {(['x', 'y', 'z'] as Axis[]).map((a) => (
-            <label key={a}>
-              <span>{a.toUpperCase()}</span>
-              <input type="number" step="0.05" value={scale[a]} onChange={(e) => { setScale({ ...scale, [a]: Number(e.target.value) }); showTransform() }} />
-            </label>
-          ))}
-        </div>
+        <>
+          <div className="xyz-grid">
+            {(['x', 'y', 'z'] as Axis[]).map((a) => (
+              <label key={a}>
+                <span>{a.toUpperCase()}</span>
+                <input
+                  type="number"
+                  step="0.05"
+                  value={scaleDraft[a]}
+                  aria-invalid={Boolean(scaleError)}
+                  aria-describedby={scaleError ? 'scale-input-error' : undefined}
+                  onChange={(e) => updateScale(a, e.target.value)}
+                />
+              </label>
+            ))}
+          </div>
+          {scaleError && (
+            <div className="input-error">
+              <p id="scale-input-error" role="alert">
+                {scaleError} Your last valid values are preserved. Correct the input or restore those values to continue.
+              </p>
+              <button type="button" className="recovery-button" onClick={resetScaleInput}>Use last valid values</button>
+            </div>
+          )}
+        </>
       )}
       {kind === 'shear' && (
         <>
